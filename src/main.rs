@@ -13,6 +13,9 @@ fn main() {
 struct Model{
     camera: Camera,
     egui: Egui,
+    mouse_press: bool,
+    uv_axis0: Vec2,
+    uv_axis: Vec2,
 }
 
 fn model(app: &App) -> Model {
@@ -36,7 +39,10 @@ fn model(app: &App) -> Model {
             phi: 45,
             a: 1000,
             c: 2000
-        }
+        },
+        mouse_press : false,
+        uv_axis0: pt2(0.0,0.0),
+        uv_axis: pt2(0.0,0.0),
     }
 }
 
@@ -69,13 +75,29 @@ fn update(_app: &App, model: &mut Model, update: Update) {
     
 }
 
-fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event::WindowEvent) {
+fn raw_window_event(app: &App, model: &mut Model, event: &nannou::winit::event::WindowEvent) {
     // Let egui handle things like keyboard and mouse input.
     model.egui.handle_raw_event(event);
     match *event {
         #[allow(unused)]
         #[allow(deprecated)]
-        nannou::winit::event::WindowEvent::CursorMoved { device_id, position, modifiers } => {println!("{:?}{:?}",position,modifiers)}
+        nannou::winit::event::WindowEvent::MouseInput { device_id, state, button, modifiers } => {
+            if state == ElementState::Pressed && button == MouseButton::Left {
+                model.mouse_press = true;
+            } else if state == ElementState::Released && button == MouseButton::Left {
+                model.mouse_press = false;
+            }
+            },
+
+        nannou::winit::event::WindowEvent::CursorMoved { device_id, position, modifiers } => {
+            if model.mouse_press == true && model.uv_axis0.x*model.uv_axis0.y !=0.0 {
+                model.uv_axis += pt2(position.x as f32/1.3, position.y as f32*(-1.0)/1.2) - model.uv_axis0;
+                model.uv_axis0 = pt2(position.x as f32/1.3, position.y as f32*(-1.0)/1.2);
+            } else if model.mouse_press == true && model.uv_axis0.x*model.uv_axis0.y ==0.0{
+                model.uv_axis0 = pt2(position.x as f32/1.3, position.y as f32*(-1.0)/1.2);
+            }
+        },
+
         #[allow(unused)]
         nannou::winit::event::WindowEvent::KeyboardInput { device_id, input, is_synthetic } => {
             if input.virtual_keycode == Some(Key::Left) && model.camera.theta < 359 && input.state == ElementState::Pressed {
@@ -94,6 +116,8 @@ fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event:
                 model.camera.phi = model.camera.phi +1;
             } else if input.virtual_keycode == Some(Key::Up) && model.camera.phi == 359 && input.state == ElementState::Pressed{
                 model.camera.phi = 1;
+            } else if input.virtual_keycode == Some(Key::Escape) && input.state == ElementState::Pressed {
+                app.exit_on_escape();
             }
             println!("{:?}",input);}
         _=> {}
@@ -110,27 +134,27 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
 
     draw.line()
-    .start(Camera::proj3t(vec3(0.0, 0.0, -1000.0), camera.clone()))
-    .end(Camera::proj3t(vec3(0.0, 0.0, 1000.0), camera.clone()))
+    .start(Camera::proj3t(vec3(0.0, 0.0, -1000.0), camera.clone())+model.uv_axis)
+    .end(Camera::proj3t(vec3(0.0, 0.0, 1000.0), camera.clone())+model.uv_axis)
     .weight(3.0)
     .color(BLUE);
     draw.line()
-    .start(Camera::proj3t(vec3(0.0, -1000.0, 0.0), camera.clone()))
-    .end(Camera::proj3t(vec3(0.0, 1000.0, 0.0), camera.clone()))
+    .start(Camera::proj3t(vec3(0.0, -1000.0, 0.0), camera.clone())+model.uv_axis)
+    .end(Camera::proj3t(vec3(0.0, 1000.0, 0.0), camera.clone())+model.uv_axis)
     .weight(3.0)
     .color(ORANGE);
     draw.line()
-    .start(Camera::proj3t(vec3(-1000.0, 0.0, 0.0), camera.clone()))
-    .end(Camera::proj3t(vec3(1000.0, 0.0, 0.0), camera.clone()))
+    .start(Camera::proj3t(vec3(-1000.0, 0.0, 0.0), camera.clone())+model.uv_axis)
+    .end(Camera::proj3t(vec3(1000.0, 0.0, 0.0), camera.clone())+model.uv_axis)
     .weight(3.0)
     .color(GREEN);
 
     let points_basis = (0..4).map(|i|{
         match i {
-            0 => Camera::proj3t(vec3(-1000.0, -1000.0, 0.0), camera.clone()),
-            1 => Camera::proj3t(vec3(-1000.0, 1000.0, 0.0), camera.clone()),
-            2 => Camera::proj3t(vec3(1000.0, 1000.0, 0.0), camera.clone()),
-            _ => Camera::proj3t(vec3(1000.0, -1000.0, 0.0), camera.clone())
+            0 => Camera::proj3t(vec3(-1000.0, -1000.0, 0.0), camera.clone())+model.uv_axis,
+            1 => Camera::proj3t(vec3(-1000.0, 1000.0, 0.0), camera.clone())+model.uv_axis,
+            2 => Camera::proj3t(vec3(1000.0, 1000.0, 0.0), camera.clone())+model.uv_axis,
+            _ => Camera::proj3t(vec3(1000.0, -1000.0, 0.0), camera.clone())+model.uv_axis
         }
     });
     draw.polygon()
@@ -138,10 +162,10 @@ fn view(app: &App, model: &Model, frame: Frame) {
     .color(rgba8(40,40,40,120));
 
     for i in 0..20{
-        let points_horizon_start  = Camera::proj3t(vec3(-1000.0 , -1000.0 + 100.0 * i as f32, 0.0), camera.clone());
-        let points_horizon_end    = Camera::proj3t(vec3(1000.0  , -1000.0 + 100.0 * i as f32, 0.0), camera.clone());
-        let points_vertical_start = Camera::proj3t(vec3(-1000.0 + 100.0 * i as f32, -1000.0 , 0.0), camera.clone());
-        let points_vertical_end   = Camera::proj3t(vec3(-1000.0 + 100.0 * i as f32, 1000.0  , 0.0), camera.clone());
+        let points_horizon_start  = Camera::proj3t(vec3(-1000.0 , -1000.0 + 100.0 * i as f32, 0.0), camera.clone())+model.uv_axis;
+        let points_horizon_end    = Camera::proj3t(vec3(1000.0  , -1000.0 + 100.0 * i as f32, 0.0), camera.clone())+model.uv_axis;
+        let points_vertical_start = Camera::proj3t(vec3(-1000.0 + 100.0 * i as f32, -1000.0 , 0.0), camera.clone())+model.uv_axis;
+        let points_vertical_end   = Camera::proj3t(vec3(-1000.0 + 100.0 * i as f32, 1000.0  , 0.0), camera.clone())+model.uv_axis;
         draw.line()
         .start(points_horizon_start)
         .end(points_horizon_end)
@@ -195,7 +219,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
             for i in 0..60{
                 if s == dst_sphere[i] {
                     let points_sphere = (0..4).map(|k|{
-                        Camera::proj3t(points_spr.clone()[i][k], camera.clone()) 
+                        Camera::proj3t(points_spr.clone()[i][k], camera.clone()) +model.uv_axis
                     });
                     draw
                     .polygon()
@@ -263,7 +287,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
         for i in 0..6{
             if k == dst_cube[i] {
                 let points_cube = (0..4).map(|j|{
-                    (Camera::proj3t(points_cb.clone()[i][j], camera.clone()) , rgba(color_cb.0 - dst_cube[i]*30,color_cb.1- dst_cube[i]*30,color_cb.2- dst_cube[i]*30,255))
+                    (Camera::proj3t(points_cb.clone()[i][j], camera.clone())+model.uv_axis , rgba(color_cb.0 - dst_cube[i]*30,color_cb.1- dst_cube[i]*30,color_cb.2- dst_cube[i]*30,255))
                 });
                 draw.polygon()
                 .points_colored(points_cube.clone());
