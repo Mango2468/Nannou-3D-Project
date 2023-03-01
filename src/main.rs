@@ -63,7 +63,7 @@ fn update(_app: &App, model: &mut Model, update: Update) {
 
         // a slider
         ui.label("A");
-        ui.add(egui::Slider::new(&mut camera.a, camera.c*(-1)..=camera.c));
+        ui.add(egui::Slider::new(&mut camera.a, camera.c*(-3)..=camera.c));
     });
     
     
@@ -154,32 +154,19 @@ fn view(app: &App, model: &Model, frame: Frame) {
         .color(rgba8(140,140,140,120));
     }
 
+
+
+
+
+
+
+
     //draw sphere
-    let pv : Vec3 = vec3(0.0, 0.0, 0.0);
-    let radius : f32 = 300.0;
+    let pv : Vec3 = vec3(200.0, 200.0, 100.0);
+    let radius : f32 = 100.0;
     for j in 0..30{
-        let points_longitude = (0..=60).map(|i| {
-            let x = 360.0_f32.to_radians()/60.0*(j as f32);           //subtract 25 to center the sine wave
-            let y = 360.0_f32.to_radians()/60.0*(i as f32);
-            let pnt3 = pt3(x.cos()*y.sin()*radius+pv.clone().x, x.sin()*y.sin()*radius+pv.clone().y,y.cos()*radius+pv.clone().z);     //scale sine wave by 20.0
-            let point = Camera::proj3t(pnt3.clone(),camera.clone());
-            (point, rgba(60.0, 0.0, 30.0, 1.0))
-        });
-        draw.polyline()
-        .weight(0.3)
-        .points_colored(points_longitude);
-
-        let points_latitude = (0..=60).map(|i| {
-            let x = 360.0_f32.to_radians()/60.0*(i as f32);           //subtract 25 to center the sine wave
-            let y = 360.0_f32.to_radians()/60.0*(j as f32);
-            let pnt3 = pt3(x.cos()*y.sin()*radius+pv.clone().x, x.sin()*y.sin()*radius+pv.clone().y,y.cos()*radius+pv.clone().z);     //scale sine wave by 20.0
-            let point = Camera::proj3t(pnt3.clone(),camera.clone());
-            (point, rgba(0.0, 30.0, 60.0, 1.0))
-        });
-        draw.polyline()
-        .weight(0.3)
-        .points_colored(points_latitude.clone());
-
+        let mut dsc_sphere : Vec<f32> =vec![];
+        let mut points_spr : Vec<Vec<Vec3>> = vec![];
         for i in 0..60{
             let points_sqr = vec![
                 pt3((360.0_f32.to_radians()/60.0*(i as f32     )).cos()*(360.0_f32.to_radians()/60.0*(j as f32     )).sin()*radius +pv.clone().x,  (360.0_f32.to_radians()/60.0*(i as f32     )).sin()*(360.0_f32.to_radians()/60.0*(j as f32     )).sin()*radius +pv.clone().y,   (360.0_f32.to_radians()/60.0*(j as f32     )).cos()*radius +pv.clone().z),
@@ -187,16 +174,54 @@ fn view(app: &App, model: &Model, frame: Frame) {
                 pt3((360.0_f32.to_radians()/60.0*(i as f32 +1.0)).cos()*(360.0_f32.to_radians()/60.0*(j as f32 +1.0)).sin()*radius +pv.clone().x,  (360.0_f32.to_radians()/60.0*(i as f32 +1.0)).sin()*(360.0_f32.to_radians()/60.0*(j as f32 +1.0)).sin()*radius +pv.clone().y,   (360.0_f32.to_radians()/60.0*(j as f32 +1.0)).cos()*radius +pv.clone().z),
                 pt3((360.0_f32.to_radians()/60.0*(i as f32     )).cos()*(360.0_f32.to_radians()/60.0*(j as f32 +1.0)).sin()*radius +pv.clone().x,  (360.0_f32.to_radians()/60.0*(i as f32     )).sin()*(360.0_f32.to_radians()/60.0*(j as f32 +1.0)).sin()*radius +pv.clone().y,   (360.0_f32.to_radians()/60.0*(j as f32 +1.0)).cos()*radius +pv.clone().z)
             ];
-            let points_square = (0..4).map(|k|{
-                Camera::proj3t(points_sqr.clone()[k], camera.clone()) 
-            });
-            draw
-            .polygon()
-            .points(points_square.clone())
-            .color(rgba8(10+(j as isize -15_isize).abs() as u8*5,48+(j as isize -15_isize).abs() as u8*5,18+(j as isize -15_isize).abs() as u8*5,180));
-            
+            let cam : Vec3 = pt3((camera.clone().theta as f32).to_radians().cos()*(camera.clone().phi as f32).to_radians().sin(), (camera.clone().theta as f32).to_radians().sin()*(camera.clone().phi as f32).to_radians().sin(), (camera.clone().phi as f32).to_radians().cos())*camera.clone().c as f32;
+            let mut distance = 0.0;
+            for int_i in 0..4{
+                distance += (points_sqr.clone()[int_i] - cam).length().powf(2.0)/4.0;
+            }
+            points_spr.push(points_sqr.clone());
+            dsc_sphere.push(distance.sqrt());
+        }
+        let mut dst_sphere : Vec<usize>= vec![];
+        for i in 0..60{
+            dst_sphere.push(0);
+            for k in 0..60{
+                if dsc_sphere[i] >= dsc_sphere[k]{
+                    dst_sphere[i] += 1;
+                }
+            }
+        }
+        for s in (1..=60).rev(){
+            for i in 0..60{
+                if s == dst_sphere[i] {
+                    let points_sphere = (0..4).map(|k|{
+                        Camera::proj3t(points_spr.clone()[i][k], camera.clone()) 
+                    });
+                    draw
+                    .polygon()
+                    .points(points_sphere.clone())
+                    .color(rgba8(10+(j as isize -15_isize).abs() as u8*5,48+(j as isize -15_isize).abs() as u8*5,18+(j as isize -15_isize).abs() as u8*5,255));
+                    draw
+                    .polyline()
+                    .weight(0.2)
+                    .points(points_sphere.clone())
+                    .color(rgba8(0,100,200,180));
+                }
+            }
         }
     }
+
+
+
+
+
+
+
+
+
+
+
+
 
     //draw cube
     let cb: Vec3 = pt3(300.0, -200.0, -400.0);
@@ -218,7 +243,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
         let mut distance : f32 = 0.0;
         let cam : Vec3 = pt3((camera.clone().theta as f32).to_radians().cos()*(camera.clone().phi as f32).to_radians().sin(), (camera.clone().theta as f32).to_radians().sin()*(camera.clone().phi as f32).to_radians().sin(), (camera.clone().phi as f32).to_radians().cos())*camera.clone().c as f32;
         for j in 0..points_cb[i].len(){
-            distance +=  (points_cb.clone()[i][j] -cam).length().powf(2.0)/6.0;
+            distance +=  (points_cb.clone()[i][j] -cam).length().powf(2.0)/4.0;
         }
         dsc_cube.push(distance.sqrt()) 
     }
@@ -234,13 +259,18 @@ fn view(app: &App, model: &Model, frame: Frame) {
     }
     println!("{:?}",dst_cube.clone());
 
-    for i in 0..6{
-        let points_cube = (0..4).map(|j|{
-            (Camera::proj3t(points_cb.clone()[i][j], camera.clone()) , rgba(color_cb.0 - dst_cube[i]*30,color_cb.1- dst_cube[i]*30,color_cb.2- dst_cube[i]*30,60))
-        });
-        draw.polygon()
-        .points_colored(points_cube.clone());
+    for k in (1..7).rev(){
+        for i in 0..6{
+            if k == dst_cube[i] {
+                let points_cube = (0..4).map(|j|{
+                    (Camera::proj3t(points_cb.clone()[i][j], camera.clone()) , rgba(color_cb.0 - dst_cube[i]*30,color_cb.1- dst_cube[i]*30,color_cb.2- dst_cube[i]*30,255))
+                });
+                draw.polygon()
+                .points_colored(points_cube.clone());
+            }
+        }
     }
+
 
     draw.to_frame(app, &frame).unwrap();
     model.egui.draw_to_frame(&frame).unwrap();
